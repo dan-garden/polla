@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Polla, the Strawpolls clone</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            padding: 0;
+            margin: 0;
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+        }
+
+        #app {
+            padding: 15px;
+        }
+
+        .poll {
+            display: block;
+            margin: 15px auto;
+            padding: 15px;
+            border: solid 1px black;
+            max-width: 500px;
+        }
+
+        .poll .name {
+            display: block;
+            font-size: 16px;
+            color: black;
+            text-align: center;
+        }
+
+        .poll .id {
+            display: block;
+            font-size: 12px;
+            color: grey;
+            text-align: center;
+        }
+
+        .poll .options {
+            padding: 15px;
+        }
+
+        .poll .options .option {
+            list-style-type: decimal;
+            width: 100%;
+            background-color: lightgrey;
+            position: relative;
+            height: 40px;
+            color: #FFF;
+        }
+
+        .poll .options .option.notvoted {
+            cursor: pointer;
+            color: black;
+        }
+
+        .poll .options .option.notvoted:hover {
+            background-color: grey;
+        }
+
+        .poll .options .option .percentage {
+            width: 0%;
+            height: 100%;
+            line-height: 40px;
+            background: grey;
+            position: absolute;
+            top: 0;
+            text-align: center;
+            font-size: 12px;
+            left: 0;
+            transition: all 0.3s;
+        }
+
+        .poll .options .option .percentage label {
+            position: absolute;
+            right: 0;
+            width: 100%;
+        }
+
+        .poll .options .option.option.notvoted .percentage {
+            text-indent: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div v-if="poll" class="poll">
+            <h3 class="name">{{poll.name}}</h3>
+            <span class="id">{{poll.id}}</span>
+            <ul class="options">
+                <li class="option" v-for="option in poll.options" :key="option.id" @click.prevent="vote(option.id);"
+                    v-bind:class="{notvoted: !voted && !owned, notowned: !owned}">
+                    <span
+                    class="percentage"
+                    v-bind:style="{ width: option.percentage + '%', backgroundColor: option.color }"
+                    >
+                        {{option.percentage + '%'}}
+                    </span>
+                </li>
+            </ul>
+            <h4>Total Votes: {{poll.total}}</h4>
+        </div>
+        <ul v-if="polls" class="polls">
+            <li v-for="poll in polls">
+                <a v-bind:href="'?id='+poll.id">{{ poll.name }}</a>
+            </li>
+        </ul>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        var app = new Vue({
+            el: '#app',
+            data: {
+                socket: io(),
+                polls: false,
+                poll: false,
+                voted: false,
+                owned: false,
+            },
+            methods: {
+                createPoll(name, options = []) {
+                    this.socket.emit('create poll', {
+                        name,
+                        options
+                    });
+                },
+
+                loadPoll(id) {
+                    this.socket.emit('get poll', id);
+                },
+
+                updatePoll(poll) {
+                    window.history.pushState(poll, poll.name, "/?id=" + poll.id);
+                    this.poll = poll;
+                },
+
+                getPolls() {
+                    this.socket.emit('get polls');
+                },
+
+                loadPollFromURL() {
+                    const id = new URLSearchParams(document.location.search).get("id");
+                    if (id) {
+                        this.loadPoll(id);
+                    } else {
+                        this.getPolls();
+                    }
+                },
+
+                vote(option_id) {
+                    if (!this.owned && !this.voted) {
+                        this.socket.emit('vote poll', {
+                            poll_id: this.poll.id,
+                            option_id: option_id
+                        });
+                        // this.voted = true;
+                    }
+                }
+
+            },
+            mounted() {
+
+                this.loadPollFromURL();
+
+                this.socket.on('error poll', () => {
+                    this.getPolls();
+                });
+
+                this.socket.on('updated poll', poll => {
+                    this.updatePoll(poll);
+                });
+
+                this.socket.on('loaded polls', polls => {
+                    this.polls = polls;
+                    this.poll = false;
+                });
+
+                this.socket.on('created poll', poll => {
+                    this.updatePoll(poll);
+                    this.owned = true;
+                });
+
+            }
+        })
+    </script>
+</body>
+
+</html>
